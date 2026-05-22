@@ -11,14 +11,13 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # =========================
-# APACHE CONFIG (CRITICAL FIX)
+# APACHE CONFIG FIX (CRITICAL)
 # =========================
 RUN a2enmod rewrite
 
-# Render uses port 10000
 RUN sed -i 's/Listen 80/Listen 10000/g' /etc/apache2/ports.conf
 
-# 🔥 FULL Apache VirtualHost fix (MOST IMPORTANT PART)
+# Proper Laravel virtual host
 RUN printf '\
 <VirtualHost *:10000>\n\
     DocumentRoot /var/www/html/public\n\
@@ -29,6 +28,9 @@ RUN printf '\
     </Directory>\n\
 \n\
     DirectoryIndex index.php index.html\n\
+\n\
+    ErrorLog ${APACHE_LOG_DIR}/error.log\n\
+    CustomLog ${APACHE_LOG_DIR}/access.log combined\n\
 </VirtualHost>\n' > /etc/apache2/sites-available/000-default.conf
 
 # =========================
@@ -43,35 +45,22 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 # APP SETUP
 # =========================
 WORKDIR /var/www/html
-
 COPY . .
 
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 RUN npm install && npm run build
 
 # =========================
-# LARAVEL SAFETY FIX
+# LARAVEL FIXES
 # =========================
-RUN php artisan config:clear || true \
- && php artisan route:clear || true \
- && php artisan view:clear || true
-
 RUN php artisan storage:link || true
 
-# =========================
-# DATABASE (OPTIONAL BUT RECOMMENDED)
-# =========================
-RUN php artisan migrate --force || true \
- && php artisan db:seed --force || true
+# ❌ DO NOT run migrate or seed here on Render build
+# RUN php artisan migrate --force
+# RUN php artisan db:seed --force
 
-# =========================
-# PERMISSIONS
-# =========================
 RUN chmod -R 775 storage bootstrap/cache
 
-# =========================
-# PORT
-# =========================
 EXPOSE 10000
 
 CMD ["apache2-foreground"]
