@@ -1,6 +1,8 @@
 FROM php:8.4-apache
 
-# Install system packages and PHP extensions
+# =========================
+# SYSTEM DEPENDENCIES
+# =========================
 RUN apt-get update && apt-get install -y \
     git unzip curl zip \
     libpq-dev libzip-dev libonig-dev libxml2-dev libpng-dev \
@@ -8,45 +10,66 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Enable Apache rewrite
+# =========================
+# APACHE CONFIG (CRITICAL FIX)
+# =========================
 RUN a2enmod rewrite
 
-# Render runs on port 10000
+# Render uses port 10000
 RUN sed -i 's/Listen 80/Listen 10000/g' /etc/apache2/ports.conf
 
-# IMPORTANT: Set Laravel public folder correctly
-RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|g' /etc/apache2/sites-available/000-default.conf
+# 🔥 FULL Apache VirtualHost fix (MOST IMPORTANT PART)
+RUN printf '\
+<VirtualHost *:10000>\n\
+    DocumentRoot /var/www/html/public\n\
+\n\
+    <Directory /var/www/html/public>\n\
+        AllowOverride All\n\
+        Require all granted\n\
+    </Directory>\n\
+\n\
+    DirectoryIndex index.php index.html\n\
+</VirtualHost>\n' > /etc/apache2/sites-available/000-default.conf
 
-# Allow .htaccess
-RUN printf '<Directory /var/www/html/public>\nAllowOverride All\nRequire all granted\n</Directory>\n' > /etc/apache2/conf-available/laravel.conf \
-    && a2enconf laravel
-
-# Install Node.js
+# =========================
+# NODE + COMPOSER
+# =========================
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
-# Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+# =========================
+# APP SETUP
+# =========================
 WORKDIR /var/www/html
 
 COPY . .
 
-# Install dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 RUN npm install && npm run build
 
-# Laravel optimization
-RUN php artisan config:clear \
- && php artisan route:clear \
- && php artisan view:clear
+# =========================
+# LARAVEL FIXES
+# =========================
+RUN php artisan optimize:clear
 
-# Storage link (safe)
 RUN php artisan storage:link || true
 
-# Permissions
+# =========================
+# DATABASE (OPTIONAL BUT RECOMMENDED)
+# =========================
+RUN php artisan migrate --force || true \
+ && php artisan db:seed --force || true
+
+# =========================
+# PERMISSIONS
+# =========================
 RUN chmod -R 775 storage bootstrap/cache
 
+# =========================
+# PORT
+# =========================
 EXPOSE 10000
 
 CMD ["apache2-foreground"]
