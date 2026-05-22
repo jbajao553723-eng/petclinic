@@ -16,8 +16,6 @@ public function register(): void
 */
 public function boot(): void
 {
-if (env('APP_ENV') === 'production') {
-URL::forceScheme('https');
-}
+    ini_set('sys_temp_dir', storage_path('framework/cache'));
 }
 }

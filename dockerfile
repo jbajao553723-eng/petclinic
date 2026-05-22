@@ -11,13 +11,12 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # =========================
-# APACHE CONFIG FIX (CRITICAL)
+# APACHE SETUP (CRITICAL)
 # =========================
 RUN a2enmod rewrite
 
 RUN sed -i 's/Listen 80/Listen 10000/g' /etc/apache2/ports.conf
 
-# Proper Laravel virtual host
 RUN printf '\
 <VirtualHost *:10000>\n\
     DocumentRoot /var/www/html/public\n\
@@ -28,9 +27,6 @@ RUN printf '\
     </Directory>\n\
 \n\
     DirectoryIndex index.php index.html\n\
-\n\
-    ErrorLog ${APACHE_LOG_DIR}/error.log\n\
-    CustomLog ${APACHE_LOG_DIR}/access.log combined\n\
 </VirtualHost>\n' > /etc/apache2/sites-available/000-default.conf
 
 # =========================
@@ -51,16 +47,29 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction
 RUN npm install && npm run build
 
 # =========================
-# LARAVEL FIXES
+# 🔥 CRITICAL FIXES (YOUR ERROR)
 # =========================
+
+# Create required writable folders
+RUN mkdir -p \
+    storage/framework/cache \
+    storage/framework/sessions \
+    storage/framework/views \
+    bootstrap/cache
+
+# Fix permissions (VERY IMPORTANT)
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 775 storage bootstrap/cache
+
+# Fix Laravel temp directory issue (tempnam crash fix)
+ENV TMPDIR=/var/www/html/storage/framework/cache
+
+# Laravel safe commands (NO DB OPERATIONS HERE)
 RUN php artisan storage:link || true
 
-# ❌ DO NOT run migrate or seed here on Render build
-# RUN php artisan migrate --force
-# RUN php artisan db:seed --force
-
-RUN chmod -R 775 storage bootstrap/cache
-
+# =========================
+# FINAL
+# =========================
 EXPOSE 10000
 
 CMD ["apache2-foreground"]
