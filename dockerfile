@@ -14,8 +14,8 @@ RUN a2enmod rewrite
 # Render runs on port 10000
 RUN sed -i 's/Listen 80/Listen 10000/g' /etc/apache2/ports.conf
 
-# Set Laravel public folder as root
-RUN sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available/000-default.conf
+# IMPORTANT: Set Laravel public folder correctly
+RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|g' /etc/apache2/sites-available/000-default.conf
 
 # Allow .htaccess
 RUN printf '<Directory /var/www/html/public>\nAllowOverride All\nRequire all granted\n</Directory>\n' > /etc/apache2/conf-available/laravel.conf \
@@ -36,12 +36,12 @@ COPY . .
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 RUN npm install && npm run build
 
-# Laravel optimizations
+# Laravel optimization
 RUN php artisan config:clear \
  && php artisan route:clear \
  && php artisan view:clear
 
-# Storage
+# Storage link (safe)
 RUN php artisan storage:link || true
 
 # Permissions
