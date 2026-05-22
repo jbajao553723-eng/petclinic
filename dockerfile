@@ -50,9 +50,11 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction
 RUN npm install && npm run build
 
 # =========================
-# LARAVEL FIXES
+# LARAVEL SAFETY FIX
 # =========================
-RUN php artisan optimize:clear
+RUN php artisan config:clear || true \
+ && php artisan route:clear || true \
+ && php artisan view:clear || true
 
 RUN php artisan storage:link || true
 
